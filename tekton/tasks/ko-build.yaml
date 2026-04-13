@@ -19,7 +19,7 @@ spec:
     - name: app-dir
       type: string
       description: Path to the Go module root, relative to workspace root.
-      default: "src"
+      default: "src/demo-app"
     - name: main-path
       type: string
       description: Path to package main, relative to app-dir (e.g. "./" or "./cmd/controller/")

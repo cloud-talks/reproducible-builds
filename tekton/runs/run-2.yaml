@@ -10,15 +10,15 @@ spec:
     name: reproducible-build
   params:
     - name: git-url
-      value: "https://github.com/cloud-talks/ttl-reaper"
+      value: "https://github.com/cloud-talks/reproducible-builds"
     - name: git-revision
-      value: "d275f1334a66d47cdce6688546047527d0954629"
+      value: "584202d2866814fc726af1465ca317238774676a"
     - name: image
       value: "ttl.sh/reproducible-demo-oss-mumbai"
     - name: source-date-epoch
       value: "0"
     - name: main-path
-      value: "./cmd/controller/"
+      value: "./"
   workspaces:
     - name: shared-workspace
       volumeClaimTemplate:
