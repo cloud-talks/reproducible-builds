@@ -1,0 +1,63 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: reproducible-build
+  labels:
+    app.kubernetes.io/part-of: reproducible-build-demo
+spec:
+  description: >-
+    Clones a Go repository and builds a container image with ko,
+    configured for byte-identical reproducibility. Tekton Chains
+    picks up the type-hinted results to generate SLSA provenance.
+  params:
+    - name: git-url
+      type: string
+    - name: git-revision
+      type: string
+    - name: image
+      type: string
+    - name: source-date-epoch
+      type: string
+      default: "0"
+    - name: main-path
+      type: string
+      default: "./"
+  results:
+    - name: IMAGE_URL
+      value: $(tasks.build.results.IMAGE_URL)
+    - name: IMAGE_DIGEST
+      value: $(tasks.build.results.IMAGE_DIGEST)
+    - name: CHAINS-GIT_URL
+      value: $(tasks.clone.results.CHAINS-GIT_URL)
+    - name: CHAINS-GIT_COMMIT
+      value: $(tasks.clone.results.CHAINS-GIT_COMMIT)
+  workspaces:
+    - name: shared-workspace
+  tasks:
+    - name: clone
+      taskRef:
+        name: git-clone
+      params:
+        - name: url
+          value: $(params.git-url)
+        - name: revision
+          value: $(params.git-revision)
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: build
+      taskRef:
+        name: ko-build
+      runAfter:
+        - clone
+      params:
+        - name: image
+          value: $(params.image)
+        - name: source-date-epoch
+          value: $(params.source-date-epoch)
+        - name: main-path
+          value: $(params.main-path)
+      workspaces:
+        - name: source
+          workspace: shared-workspace

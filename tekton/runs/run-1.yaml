@@ -1,0 +1,30 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: reproducible-build-run-1-
+  labels:
+    app.kubernetes.io/part-of: reproducible-build-demo
+    demo/run: "1"
+spec:
+  pipelineRef:
+    name: reproducible-build
+  params:
+    - name: git-url
+      value: "https://github.com/cloud-talks/ttl-reaper"
+    - name: git-revision
+      value: "d275f1334a66d47cdce6688546047527d0954629"
+    - name: image
+      value: "ttl.sh/reproducible-demo-oss-mumbai"
+    - name: source-date-epoch
+      value: "0"
+    - name: main-path
+      value: "./cmd/controller/"
+  workspaces:
+    - name: shared-workspace
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 256Mi

@@ -1,0 +1,21 @@
+# Pin the base image by digest for reproducibility.
+# cgr.dev/chainguard/static is a minimal distroless image (~2MB).
+defaultBaseImage: cgr.dev/chainguard/static@sha256:67a1b00e0134e2b3a614c7198a26f7deed9d11b7acad4d52c79c0cfd47a2eae7
+
+# Eliminate every known source of Go binary non-determinism:
+#   -buildid=   → strips the build ID that varies across machines/runs
+#   -s -w       → strips symbol table and DWARF debug info (smaller + deterministic)
+defaultLdflags:
+  - -buildid=
+  - -s
+  - -w
+
+# -trimpath removes absolute filesystem paths from the binary,
+# so building in /home/alice vs /home/bob produces the same output.
+# NOTE: ko uses -trimpath by default since v0.15, but we set it
+# explicitly for clarity during the talk.
+defaultFlags:
+  - -trimpath
+
+defaultPlatforms:
+  - linux/amd64
