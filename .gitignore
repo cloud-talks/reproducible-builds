@@ -1,0 +1,6 @@
+# Testing artifacts
+cosign.pub
+
+# Tool configurations
+.claude/
+.superpowers/

@@ -1,0 +1,30 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: naive-build-run-1-
+  labels:
+    app.kubernetes.io/part-of: reproducible-build-demo
+    demo/run: "naive-1"
+spec:
+  pipelineRef:
+    name: reproducible-build
+  params:
+    - name: git-url
+      value: "https://github.com/cloud-talks/reproducible-builds"
+    - name: git-revision
+      value: "584202d2866814fc726af1465ca317238774676a"
+    - name: image
+      value: "ttl.sh/reproducible-demo-naive"
+    - name: source-date-epoch
+      value: "1717000001"
+    - name: main-path
+      value: "./"
+  workspaces:
+    - name: shared-workspace
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 256Mi

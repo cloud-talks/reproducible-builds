@@ -33,7 +33,7 @@ spec:
     - name: source
   steps:
     - name: build-and-push
-      image: ghcr.io/ko-build/ko:latest
+      image: ghcr.io/ko-build/ko@sha256:ba172bcf773f5ec5347ca5e04e4edb8c961715bf41ee22c88a8c1e24fa1ae1ad
       env:
         - name: KO_DOCKER_REPO
           value: "$(params.image)"
@@ -63,7 +63,7 @@ spec:
         cat /tmp/ko-out.txt
 
         IMAGE_REF=$(grep '@sha256:' /tmp/ko-out.txt | tail -1 | tr -d '[:space:]')
-
+        grep '@sha256:' /tmp/ko-out.txt | tail -1 | tr -d '[:space:]'
         if [ -z "${IMAGE_REF}" ]; then
           echo "ERROR: could not find image reference in ko output"
           exit 1

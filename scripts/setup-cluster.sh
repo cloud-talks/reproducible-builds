@@ -15,6 +15,23 @@ info()  { echo "==> $*"; }
 ok()    { echo " ✓  $*"; }
 fail()  { echo " ✗  $*" >&2; exit 1; }
 
+# ── --check mode: validate cluster without reinstalling ────────────
+if [ "${1:-}" = "--check" ]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  exec "${SCRIPT_DIR}/pre-flight.sh"
+fi
+
+# ── Detect container runtime ───────────────────────────────────────
+if docker info >/dev/null 2>&1; then
+  export KIND_EXPERIMENTAL_PROVIDER=""
+  ok "Using Docker as container runtime"
+elif podman info >/dev/null 2>&1; then
+  export KIND_EXPERIMENTAL_PROVIDER=podman
+  ok "Using Podman as container runtime"
+else
+  fail "Neither Docker nor Podman is running"
+fi
+
 # ── Pre-flight checks ──────────────────────────────────────────────
 for cmd in kind kubectl cosign; do
   command -v "$cmd" >/dev/null 2>&1 || fail "Required tool not found: $cmd"
