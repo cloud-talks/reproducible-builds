@@ -15,6 +15,23 @@ info()  { echo "==> $*"; }
 ok()    { echo " ✓  $*"; }
 fail()  { echo " ✗  $*" >&2; exit 1; }
 
+# ── --check mode: validate cluster without reinstalling ────────────
+if [ "${1:-}" = "--check" ]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  exec "${SCRIPT_DIR}/pre-flight.sh"
+fi
+
+# ── Detect container runtime ───────────────────────────────────────
+if docker info >/dev/null 2>&1; then
+  export KIND_EXPERIMENTAL_PROVIDER=""
+  ok "Using Docker as container runtime"
+elif podman info >/dev/null 2>&1; then
+  export KIND_EXPERIMENTAL_PROVIDER=podman
+  ok "Using Podman as container runtime"
+else
+  fail "Neither Docker nor Podman is running"
+fi
+
 # ── Pre-flight checks ──────────────────────────────────────────────
 for cmd in kind kubectl cosign; do
   command -v "$cmd" >/dev/null 2>&1 || fail "Required tool not found: $cmd"
@@ -78,9 +95,12 @@ ok "Tekton Chains configured"
 
 # ── 6. Generate cosign keypair ─────────────────────────────────────
 info "Generating cosign signing keypair..."
-if kubectl get secret signing-secrets -n tekton-chains >/dev/null 2>&1; then
-  info "Signing secret already exists, skipping keypair generation"
+KEY_COUNT=$(kubectl get secret signing-secrets -n tekton-chains -o json 2>/dev/null | \
+  python3 -c "import sys,json; print(len(json.load(sys.stdin).get('data',{})))" 2>/dev/null || echo "0")
+if [ "${KEY_COUNT}" -gt 0 ]; then
+  info "Signing secret already has keys, skipping keypair generation"
 else
+  kubectl delete secret signing-secrets -n tekton-chains 2>/dev/null || true
   COSIGN_PASSWORD="" cosign generate-key-pair k8s://tekton-chains/signing-secrets
 fi
 ok "Cosign keypair ready"
@@ -89,7 +109,10 @@ ok "Cosign keypair ready"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "${SCRIPT_DIR}")"
 
-info "Applying Tasks..."
+info "Installing upstream tasks from Tekton catalog..."
+kubectl apply -f "https://raw.githubusercontent.com/tektoncd/catalog/main/task/git-clone/0.9/git-clone.yaml"
+kubectl apply -f "https://raw.githubusercontent.com/tektoncd/catalog/main/task/buildah/0.8/buildah.yaml"
+info "Applying local tasks..."
 kubectl apply -f "${PROJECT_DIR}/tekton/tasks/"
 ok "Tasks applied"
 
@@ -100,7 +123,7 @@ ok "Pipeline applied"
 # ── Done ───────────────────────────────────────────────────────────
 echo ""
 echo "============================================"
-echo "  Cluster is ready for the demo!"
+echo "  Cluster is ready!"
 echo "============================================"
 echo ""
 echo "  Cluster:    kind-${CLUSTER_NAME}"

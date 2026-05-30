@@ -1,0 +1,40 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: verify-hermetic
+  labels:
+    app.kubernetes.io/part-of: reproducible-build-demo
+spec:
+  description: >-
+    Demonstrates hermetic execution by running a step with no network
+    access. The step tries to reach the internet (expected to fail),
+    then confirms the isolation.
+  steps:
+    - name: verify-no-network
+      image: alpine:3.20
+      script: |
+        #!/usr/bin/env sh
+        set -u
+
+        echo "=== Hermetic Execution Demo ==="
+        echo ""
+        echo "This TaskRun has the annotation:"
+        echo "  experimental.tekton.dev/execution-mode: hermetic"
+        echo ""
+        echo "Attempting to reach the internet..."
+        echo ""
+
+        if wget -q --timeout=3 -O /dev/null https://google.com 2>/dev/null; then
+          echo "✗ Network access succeeded — hermetic mode is NOT working"
+          exit 1
+        else
+          echo "✓ Network access blocked — hermetic mode is working"
+        fi
+
+        echo ""
+        echo "In production, this means:"
+        echo "  • No surprise dependency downloads mid-build"
+        echo "  • No data exfiltration from the build environment"
+        echo "  • Build output depends only on declared inputs"
+        echo ""
+        echo "=== Hermetic Verification Passed ==="

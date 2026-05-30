@@ -1,0 +1,11 @@
+apiVersion: tekton.dev/v1
+kind: TaskRun
+metadata:
+  generateName: hermetic-verify-
+  labels:
+    app.kubernetes.io/part-of: reproducible-build-demo
+  annotations:
+    experimental.tekton.dev/execution-mode: hermetic
+spec:
+  taskRef:
+    name: verify-hermetic

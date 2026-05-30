@@ -1,10 +1,10 @@
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  generateName: reproducible-build-run-2-
+  generateName: naive-build-run-1-
   labels:
     app.kubernetes.io/part-of: reproducible-build-demo
-    demo/run: "2"
+    demo/run: "naive-1"
 spec:
   pipelineRef:
     name: reproducible-build
@@ -14,9 +14,9 @@ spec:
     - name: git-revision
       value: "29859cf05450f211368294fda9b88acb21be5c67"
     - name: image
-      value: "ttl.sh/reproducible-demo-oss-mumbai"
+      value: "ttl.sh/reproducible-demo-naive"
     - name: build-extra-args
-      value: "--source-date-epoch 0 --rewrite-timestamp"
+      value: ""
   workspaces:
     - name: shared-workspace
       volumeClaimTemplate:
