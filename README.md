@@ -24,7 +24,7 @@ SLSA-compliant provenance for each build and signs it cryptographically.
 On macOS, all tools are available via [Homebrew](https://brew.sh/):
 `brew install kind kubectl cosign tektoncd-cli`
 
-The demo pushes images to [ttl.sh](https://ttl.sh), a free anonymous container
+Images are pushed to [ttl.sh](https://ttl.sh), a free anonymous container
 registry where images auto-expire after a few hours. No registry account is
 needed. Cluster pods need outbound internet access to reach GitHub and ttl.sh.
 
@@ -37,16 +37,16 @@ needed. Cluster pods need outbound internet access to reach GitHub and ttl.sh.
 # 2. Verify the cluster is healthy
 ./scripts/pre-flight.sh
 
-# 3. Run the demo (naive builds → reproducible builds → provenance → policy gate)
+# 3. Run the full demonstration
 ./scripts/run-demo.sh
 
 # 4. Clean up
 ./scripts/teardown.sh
 ```
 
-To run a simulated demo without a cluster: `DRY_RUN=true ./scripts/run-demo.sh`
+To run with simulated output (no cluster needed): `DRY_RUN=true ./scripts/run-demo.sh`
 
-## Before the Demo
+## Configuration
 
 The PipelineRun YAMLs (`tekton/runs/run-*.yaml`) are pre-configured to clone
 from `https://github.com/cloud-talks/reproducible-builds` at a pinned commit
@@ -72,29 +72,22 @@ demo-app/
 
 tekton/
   tasks/
-    git-clone.yaml     Task: clone repo, emit CHAINS-GIT_URL/COMMIT
-    buildah-build.yaml Task: build with buildah, emit IMAGE_URL/DIGEST
-    verify-hermetic.yaml  Task: hermetic execution demo
+    verify-hermetic.yaml  Task: hermetic execution verification
   pipelines/
-    reproducible-build.yaml   Pipeline: clone → build
+    reproducible-build.yaml   Pipeline: clone → build (uses upstream catalog tasks)
   runs/
-    run-1.yaml         Reproducible PipelineRun #1
-    run-2.yaml         Reproducible PipelineRun #2 (identical params)
-    run-naive-1.yaml   Naive PipelineRun #1 (no repro flags)
-    run-naive-2.yaml   Naive PipelineRun #2 (no repro flags)
+    run-1.yaml         PipelineRun with reproducibility flags
+    run-2.yaml         PipelineRun with reproducibility flags (identical params)
+    run-naive-1.yaml   PipelineRun without reproducibility flags
+    run-naive-2.yaml   PipelineRun without reproducibility flags
     run-hermetic.yaml  Hermetic execution TaskRun
 
 scripts/
   setup-cluster.sh     Kind + Tekton + Chains + cosign setup
-  pre-flight.sh        Pre-demo health check
-  run-demo.sh          Full demo: naive → reproducible → provenance → policy
+  pre-flight.sh        Health check for the cluster environment
+  run-demo.sh          Runs the full build + provenance + policy workflow
   policy-check.sh      Policy gate: checks provenance → ALLOW / DENY
-  record-hermetic-demo.sh  Record hermetic demo (requires Docker)
   teardown.sh          Delete the Kind cluster
-
-ko/                    Reference: ko-based approach (alternative to Dockerfile)
-  .ko.yaml             ko config with reproducibility flags
-  ko-build.yaml        Tekton Task for ko builds
 ```
 
 ## How Reproducibility Is Achieved
@@ -116,16 +109,15 @@ the orchestration and provenance — parameterized pipelines make inputs explici
 structured results give Chains a machine-readable contract, and Chains generates
 signed SLSA provenance automatically. That's the "pipelines to provenance" arc.
 
-## The Naive vs Reproducible Contrast
+## With and Without Reproducibility Flags
 
-The pipeline has a `reproducible` parameter (default `"true"`):
+The pipeline has a `build-extra-args` parameter (default:
+`"--source-date-epoch 0 --rewrite-timestamp"`):
 
-- **Naive builds** (`reproducible: "false"`): buildah runs without timestamp
-  clamping. Real timestamps are embedded in image layers. Two builds of the
-  same Dockerfile produce different digests.
-- **Reproducible builds** (`reproducible: "true"`): buildah runs with
-  `--source-date-epoch 0 --rewrite-timestamp`. Timestamps are clamped to
-  epoch zero. Two builds produce identical digests.
+- **Without flags** (`build-extra-args: ""`): buildah embeds real timestamps
+  in image layers. Two builds of the same Dockerfile produce different digests.
+- **With flags** (`build-extra-args: "--source-date-epoch 0 --rewrite-timestamp"`):
+  timestamps are clamped to epoch zero. Two builds produce identical digests.
 
 Same Dockerfile, same source, same commit. The only difference is two buildah
 flags.
@@ -161,10 +153,9 @@ annotations:
   experimental.tekton.dev/execution-mode: hermetic
 ```
 
-The demo includes a standalone hermetic TaskRun (`run-hermetic.yaml`) that
+The repo includes a standalone hermetic TaskRun (`run-hermetic.yaml`) that
 proves network isolation works. Hermetic execution requires Docker (not
-Podman) as the container runtime. Use `./scripts/record-hermetic-demo.sh`
-to pre-record the demo.
+Podman) as the container runtime.
 
 ## Troubleshooting
 
@@ -181,14 +172,14 @@ kubectl get configmap chains-config -n tekton-chains -o yaml
 ```
 
 **Digests don't match:**
-Check that both runs use identical params and `reproducible: "true"`.
-Inspect the build logs:
+Check that both runs use identical params and `build-extra-args` includes
+`--source-date-epoch 0 --rewrite-timestamp`. Inspect the build logs:
 ```bash
 tkn pipelinerun logs <run-name>
 ```
 
 Common causes of non-reproducibility:
-- `reproducible` param set to `"false"` (missing `--source-date-epoch`)
+- `build-extra-args` is empty (missing `--source-date-epoch 0 --rewrite-timestamp`)
 - Missing `-buildid=` or `-trimpath` in Dockerfile `go build` command
 - Base image referenced by tag instead of digest
 - Git revision is a branch name instead of a commit SHA

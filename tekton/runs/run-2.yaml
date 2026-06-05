@@ -12,11 +12,11 @@ spec:
     - name: git-url
       value: "https://github.com/cloud-talks/reproducible-builds"
     - name: git-revision
-      value: "584202d2866814fc726af1465ca317238774676a"
+      value: "29859cf05450f211368294fda9b88acb21be5c67"
     - name: image
       value: "ttl.sh/reproducible-demo-oss-mumbai"
-    - name: reproducible
-      value: "true"
+    - name: build-extra-args
+      value: "--source-date-epoch 0 --rewrite-timestamp"
   workspaces:
     - name: shared-workspace
       volumeClaimTemplate:

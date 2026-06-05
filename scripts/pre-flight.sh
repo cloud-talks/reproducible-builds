@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Pre-flight check for the reproducible builds demo.
-# Run this 5 minutes before going on stage.
+# Pre-flight check for the reproducible builds environment.
+# Verifies that the cluster, Tekton, and Chains are healthy.
 #
 set -euo pipefail
 
@@ -22,7 +22,7 @@ check_fail() { echo -e "  ${RED}✗${RESET} $*"; FAIL=$((FAIL + 1)); }
 check_warn() { echo -e "  ${YELLOW}⚠${RESET} $*"; WARN=$((WARN + 1)); }
 
 echo ""
-echo -e "${BOLD}Pre-flight Check: Reproducible Builds Demo${RESET}"
+echo -e "${BOLD}Pre-flight Check: Reproducible Builds${RESET}"
 echo -e "${BOLD}$(date '+%Y-%m-%d %H:%M:%S')${RESET}"
 echo ""
 
@@ -103,7 +103,7 @@ fi
 # ── 4. Tekton Resources ──────────────────────────────────────────
 echo ""
 echo -e "${BOLD}Tekton Resources${RESET}"
-for resource in "task/git-clone" "task/ko-build" "pipeline/reproducible-build"; do
+for resource in "task/git-clone" "task/buildah" "pipeline/reproducible-build"; do
   if kubectl get "${resource}" >/dev/null 2>&1; then
     check_pass "${resource} exists"
   else
@@ -117,9 +117,9 @@ echo -e "${BOLD}Cleanup${RESET}"
 EXISTING_RUNS=$(kubectl get pipelinerun -l app.kubernetes.io/part-of=reproducible-build-demo \
   --no-headers 2>/dev/null | wc -l | tr -d ' ')
 if [ "${EXISTING_RUNS}" = "0" ]; then
-  check_pass "No stale PipelineRuns from previous demos"
+  check_pass "No stale PipelineRuns from previous runs"
 else
-  check_warn "${EXISTING_RUNS} PipelineRun(s) from previous demos — consider: kubectl delete pipelinerun -l app.kubernetes.io/part-of=reproducible-build-demo"
+  check_warn "${EXISTING_RUNS} PipelineRun(s) from previous runs — consider: kubectl delete pipelinerun -l app.kubernetes.io/part-of=reproducible-build-demo"
 fi
 
 # ── 6. Tools ─────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ for cmd in kind kubectl cosign tkn; do
   if command -v "${cmd}" >/dev/null 2>&1; then
     check_pass "${cmd} available"
   else
-    check_warn "${cmd} not found (optional for demo but useful for troubleshooting)"
+    check_warn "${cmd} not found (optional but useful for troubleshooting)"
   fi
 done
 

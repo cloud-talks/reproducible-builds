@@ -7,8 +7,9 @@ metadata:
 spec:
   description: >-
     Clones a Git repository and builds a container image from a Dockerfile
-    using buildah, with optional reproducibility flags. Tekton Chains
-    picks up the type-hinted results to generate SLSA provenance.
+    using upstream Tekton catalog tasks (git-clone + buildah).
+    Reproducibility flags are passed via BUILD_EXTRA_ARGS. Tekton Chains
+    picks up the type-hinted pipeline results to generate SLSA provenance.
   params:
     - name: git-url
       type: string
@@ -16,18 +17,18 @@ spec:
       type: string
     - name: image
       type: string
-    - name: reproducible
+    - name: build-extra-args
       type: string
-      default: "true"
+      default: "--source-date-epoch 0 --rewrite-timestamp"
   results:
     - name: IMAGE_URL
       value: $(tasks.build.results.IMAGE_URL)
     - name: IMAGE_DIGEST
       value: $(tasks.build.results.IMAGE_DIGEST)
     - name: CHAINS-GIT_URL
-      value: $(tasks.clone.results.CHAINS-GIT_URL)
+      value: $(tasks.clone.results.url)
     - name: CHAINS-GIT_COMMIT
-      value: $(tasks.clone.results.CHAINS-GIT_COMMIT)
+      value: $(tasks.clone.results.commit)
   workspaces:
     - name: shared-workspace
   tasks:
@@ -40,19 +41,27 @@ spec:
         - name: revision
           value: $(params.git-revision)
       workspaces:
-        - name: source
+        - name: output
           workspace: shared-workspace
 
     - name: build
       taskRef:
-        name: buildah-build
+        name: buildah
       runAfter:
         - clone
       params:
-        - name: image
+        - name: IMAGE
           value: $(params.image)
-        - name: reproducible
-          value: $(params.reproducible)
+        - name: DOCKERFILE
+          value: ./Dockerfile
+        - name: CONTEXT
+          value: demo-app
+        - name: TLSVERIFY
+          value: "false"
+        - name: STORAGE_DRIVER
+          value: vfs
+        - name: BUILD_EXTRA_ARGS
+          value: $(params.build-extra-args)
       workspaces:
         - name: source
           workspace: shared-workspace
