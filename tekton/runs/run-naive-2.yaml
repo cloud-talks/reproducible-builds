@@ -15,10 +15,8 @@ spec:
       value: "584202d2866814fc726af1465ca317238774676a"
     - name: image
       value: "ttl.sh/reproducible-demo-naive"
-    - name: source-date-epoch
-      value: "1717000002"
-    - name: main-path
-      value: "./"
+    - name: reproducible
+      value: "false"
   workspaces:
     - name: shared-workspace
       volumeClaimTemplate:
@@ -27,4 +25,4 @@ spec:
             - ReadWriteOnce
           resources:
             requests:
-              storage: 256Mi
+              storage: 1Gi

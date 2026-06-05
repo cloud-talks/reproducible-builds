@@ -74,7 +74,7 @@ if [ "${DRY_RUN}" = "true" ]; then
   REPRO_DIGEST="sha256:75d4b60a847dba85446f05b676a0d0172faeff3ade8005c91d979ffe7d16b446"
 
   banner "ACT 1: Show It Broken"
-  info "Two builds of the same code, with different SOURCE_DATE_EPOCH values..."
+  info "Two builds of the same Dockerfile — no reproducibility flags..."
   sleep 1
   pass "Naive build #1 succeeded"
   pass "Naive build #2 succeeded"
@@ -82,10 +82,9 @@ if [ "${DRY_RUN}" = "true" ]; then
   info "Naive Build #1:  ${NAIVE_DIGEST_1}"
   info "Naive Build #2:  ${NAIVE_DIGEST_2}"
   echo ""
-  fail "DIGESTS DO NOT MATCH — same code, different images!"
+  fail "DIGESTS DO NOT MATCH — same Dockerfile, different images!"
   echo ""
-  echo "  The only difference: SOURCE_DATE_EPOCH was 1717000001 vs 1717000002."
-  echo "  One second of timestamp difference → completely different image."
+  echo "  Buildah embedded real timestamps → different image config → different digest."
   echo ""
   read -rp "Press Enter to see the fix..."
 
@@ -142,9 +141,8 @@ fi
 # ── Act 1: Show It Broken ────────────────────────────────────────
 banner "ACT 1: Show It Broken"
 
-info "Building the same app twice with different SOURCE_DATE_EPOCH values..."
-echo "  Naive build #1: SOURCE_DATE_EPOCH=1717000001"
-echo "  Naive build #2: SOURCE_DATE_EPOCH=1717000002"
+info "Building the same Dockerfile twice — no reproducibility flags..."
+echo "  buildah bud (without --source-date-epoch or --rewrite-timestamp)"
 echo ""
 
 NAIVE1_NAME=$(kubectl create -f "${PROJECT_DIR}/tekton/runs/run-naive-1.yaml" -o name | sed 's|pipelinerun.tekton.dev/||')
@@ -165,12 +163,12 @@ info "Naive Build #2:  ${NAIVE_DIGEST2}"
 echo ""
 
 if [ "${NAIVE_DIGEST1}" != "${NAIVE_DIGEST2}" ]; then
-  fail "DIGESTS DO NOT MATCH — same code, different images!"
+  fail "DIGESTS DO NOT MATCH — same Dockerfile, different images!"
   echo ""
-  echo "  The only difference: SOURCE_DATE_EPOCH was 1717000001 vs 1717000002."
-  echo "  One second of timestamp difference → completely different image."
+  echo "  Same source, same Dockerfile, same commit."
+  echo "  Buildah embedded real timestamps → different image config → different digest."
 else
-  warn "Digests unexpectedly match (both timestamps may have been the same)."
+  warn "Digests unexpectedly match — buildah may have cached layers."
 fi
 
 echo ""
@@ -185,9 +183,9 @@ cat "${PROJECT_DIR}/demo-app/main.go"
 echo "---"
 echo ""
 
-info "ko reproducibility config (demo-app/.ko.yaml):"
+info "Dockerfile (demo-app/Dockerfile):"
 echo "---"
-cat "${PROJECT_DIR}/demo-app/.ko.yaml"
+cat "${PROJECT_DIR}/demo-app/Dockerfile"
 echo "---"
 echo ""
 read -rp "Press Enter to start the reproducible builds..."
@@ -195,7 +193,7 @@ read -rp "Press Enter to start the reproducible builds..."
 # ── Act 3: The Fix — Reproducible Builds ─────────────────────────
 banner "ACT 3: The Fix — Reproducible Builds"
 
-info "Same code, same commit — but now SOURCE_DATE_EPOCH=0 for both..."
+info "Same Dockerfile, same commit — now with buildah --source-date-epoch 0 --rewrite-timestamp..."
 echo ""
 
 RUN1_NAME=$(kubectl create -f "${PROJECT_DIR}/tekton/runs/run-1.yaml" -o name | sed 's|pipelinerun.tekton.dev/||')
@@ -222,8 +220,8 @@ echo ""
 if [ "${DIGEST1}" = "${DIGEST2}" ]; then
   pass "DIGESTS MATCH — builds are byte-identical!"
   echo ""
-  echo "  Before (naive):       different timestamps → different digests"
-  echo "  After (reproducible): SOURCE_DATE_EPOCH=0 → identical digests"
+  echo "  Before (naive):       buildah without repro flags → different digests"
+  echo "  After (reproducible): --source-date-epoch 0 --rewrite-timestamp → identical digests"
   echo ""
 else
   fail "DIGESTS DO NOT MATCH — investigate build logs"
@@ -339,33 +337,18 @@ echo ""
 
 read -rp "Press Enter for hermetic execution..."
 
-# ── Act 6: Hermetic Execution ───────────────────────────────────
+# ── Act 6: Hermetic Execution (pre-recorded) ────────────────────
 banner "ACT 6: Hermetic Execution"
 
-info "Running a TaskRun with hermetic execution annotation..."
-info "  experimental.tekton.dev/execution-mode: hermetic"
+info "Hermetic execution requires Docker (not Podman). Showing pre-recorded demo."
 echo ""
 
-kubectl apply -f "${PROJECT_DIR}/tekton/tasks/verify-hermetic.yaml" 2>/dev/null
-HERMETIC_NAME=$(kubectl create -f "${PROJECT_DIR}/tekton/runs/run-hermetic.yaml" -o name | sed 's|taskrun.tekton.dev/||')
-echo "  → ${HERMETIC_NAME}"
-echo ""
-
-if kubectl wait --for=condition=Succeeded --timeout=60s "taskrun/${HERMETIC_NAME}" 2>/dev/null; then
-  pass "Hermetic TaskRun succeeded"
-  echo ""
-  info "TaskRun logs:"
-  kubectl logs "${HERMETIC_NAME}-pod" --container=step-verify-no-network 2>/dev/null || true
+RECORDING="${PROJECT_DIR}/talk/recordings/hermetic-demo.txt"
+if [ -f "${RECORDING}" ]; then
+  cat "${RECORDING}"
 else
-  STATUS=$(kubectl get taskrun "${HERMETIC_NAME}" -o jsonpath='{.status.conditions[0].reason}' 2>/dev/null || true)
-  if [ "${STATUS}" = "Failed" ]; then
-    warn "TaskRun failed — this may be expected if hermetic mode blocked a required step"
-    echo ""
-    info "TaskRun logs:"
-    kubectl logs "${HERMETIC_NAME}-pod" --container=step-verify-no-network 2>/dev/null || true
-  else
-    fail "TaskRun timed out"
-  fi
+  warn "No recording found at ${RECORDING}"
+  info "Run ./scripts/record-hermetic-demo.sh (with Docker) to generate it."
 fi
 
 # ── Summary ──────────────────────────────────────────────────────
@@ -381,12 +364,17 @@ echo "  5. Hermetic execution: network blocked during task"
 echo ""
 echo "Key ingredients:"
 echo ""
-echo "  • SOURCE_DATE_EPOCH=0      → no timestamp non-determinism"
-echo "  • -trimpath                 → no filesystem path leakage"
-echo "  • -ldflags='-buildid='     → no Go build ID variation"
-echo "  • Pinned base image digest → no base image drift"
-echo "  • Pinned git commit SHA    → no source code drift"
-echo "  • Tekton Chains            → automatic signed provenance"
+echo "  Dockerfile:"
+echo "  • Pinned base images by digest    → no base image drift"
+echo "  • -trimpath -ldflags='-buildid='  → deterministic Go binary"
+echo ""
+echo "  Buildah:"
+echo "  • --source-date-epoch 0           → zeroed timestamps"
+echo "  • --rewrite-timestamp             → clamped file metadata"
+echo ""
+echo "  Tekton:"
+echo "  • Parameterized PipelineRun       → explicit, repeatable inputs"
+echo "  • Tekton Chains                   → automatic signed SLSA provenance"
 echo "  • Hermetic execution       → no network access during build"
 echo ""
 echo "  provenance + reproducibility = verifiable supply chain"

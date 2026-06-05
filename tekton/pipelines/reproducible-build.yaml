@@ -6,8 +6,8 @@ metadata:
     app.kubernetes.io/part-of: reproducible-build-demo
 spec:
   description: >-
-    Clones a Go repository and builds a container image with ko,
-    configured for byte-identical reproducibility. Tekton Chains
+    Clones a Git repository and builds a container image from a Dockerfile
+    using buildah, with optional reproducibility flags. Tekton Chains
     picks up the type-hinted results to generate SLSA provenance.
   params:
     - name: git-url
@@ -16,12 +16,9 @@ spec:
       type: string
     - name: image
       type: string
-    - name: source-date-epoch
+    - name: reproducible
       type: string
-      default: "0"
-    - name: main-path
-      type: string
-      default: "./"
+      default: "true"
   results:
     - name: IMAGE_URL
       value: $(tasks.build.results.IMAGE_URL)
@@ -48,16 +45,14 @@ spec:
 
     - name: build
       taskRef:
-        name: ko-build
+        name: buildah-build
       runAfter:
         - clone
       params:
         - name: image
           value: $(params.image)
-        - name: source-date-epoch
-          value: $(params.source-date-epoch)
-        - name: main-path
-          value: $(params.main-path)
+        - name: reproducible
+          value: $(params.reproducible)
       workspaces:
         - name: source
           workspace: shared-workspace
